@@ -7,6 +7,47 @@
 #include "syscall.h"
 #include "defs.h"
 
+
+#define AUDIT_BUF_SIZE 2048
+char audit_log_buffer[AUDIT_BUF_SIZE];
+int audit_ptr = 0;
+
+// Helper function to convert int to string manually in kernel
+void itoa(int n, char s[]) {
+    int i = 0;
+    do { s[i++] = n % 10 + '0'; } while ((n /= 10) > 0);
+    s[i] = '\0';
+    // Reverse the string
+    for (int j = 0, k = i-1; j < k; j++, k--) {
+        char temp = s[j]; s[j] = s[k]; s[k] = temp;
+    }
+}
+
+// Helper to keep the main function clean
+void record_audit_raw(char *s) {
+  while(*s && audit_ptr < AUDIT_BUF_SIZE - 1)
+    audit_log_buffer[audit_ptr++] = *s++;
+}
+
+void record_audit(char *msg) {
+  char time_str[16];
+  extern uint ticks; // Access the global kernel clock
+  
+  itoa(ticks, time_str);
+  
+  if(audit_ptr + strlen(msg) + 20 >= AUDIT_BUF_SIZE) audit_ptr = 0;
+
+  // Prepend [Time (T): X]
+  record_audit_raw("[T:");
+  record_audit_raw(time_str);
+  record_audit_raw("] ");
+  
+  record_audit_raw(msg);
+  audit_log_buffer[audit_ptr++] = '\n';
+}
+
+
+
 // Fetch the uint64 at addr from the current process.
 int
 fetchaddr(uint64 addr, uint64 *ip)
@@ -101,6 +142,7 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_getaudit(void); // Added for silent audit 
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -126,6 +168,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_getaudit] sys_getaudit, // Added for silent audit
 };
 
 void
@@ -133,12 +176,34 @@ syscall(void)
 {
   int num;
   struct proc *p = myproc();
+  char path[64]; // buffer to store the path for exec
 
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
+
+    // --- ONLY PRINT SENSITIVE CALLS TO SILENT AUDIT ---
+    if(num == SYS_exec) {
+      argstr(0, path, 64); 
+    }
+
+    // 1. RUN THE ACTUAL SYSCALL
+    // If this is exec, the memory is now wiped/replaced
     p->trapframe->a0 = syscalls[num]();
+
+    // 2. STEALTH LOGGING: No printf here!
+    if(num == SYS_exec) {
+       struct proc *p = myproc();
+       
+       // SECURITY LOGIC: Only log "untrusted" processes (PID > 2)
+       // This makes sure to ignore the system's own boot-up sequence.
+       if(p->pid > 2) {
+           record_audit(path); 
+       }
+    }
+    // ----------------------------------
+
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

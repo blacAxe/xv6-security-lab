@@ -107,3 +107,25 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// Support for system calls audit logs.
+extern char audit_log_buffer[];
+extern int audit_ptr;
+
+// Added for silent audit
+uint64
+sys_getaudit(void)
+{
+  uint64 user_addr;
+  argaddr(0, &user_addr); 
+
+  if(audit_ptr == 0) return 0; // Nothing to see here
+
+  struct proc *p = myproc();
+  if(copyout(p->pagetable, user_addr, audit_log_buffer, audit_ptr) < 0)
+    return -1;
+
+  int total = audit_ptr;
+  audit_ptr = 0; 
+  return total;
+}
