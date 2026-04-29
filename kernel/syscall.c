@@ -184,23 +184,30 @@ syscall(void)
     // and store its return value in p->trapframe->a0
 
     // --- ONLY PRINT SENSITIVE CALLS TO SILENT AUDIT ---
+    // Grab the path while it's still in memory (before the syscall potentially overwrites it)
     if(num == SYS_exec) {
       argstr(0, path, 64); 
+
+      // CRITICAL CHECK: Catch them before they even start
+      if(strncmp(path, "secret_tool", 11) == 0) {
+        record_audit("[ALERT] Illegal Access Attempt! Killing Process.");
+        p->killed = 1;
+        p->trapframe->a0 = -1; // Return error to user
+        return; 
+      }
     }
 
-    // 1. RUN THE ACTUAL SYSCALL
-    // If this is exec, the memory is now wiped/replaced
     p->trapframe->a0 = syscalls[num]();
 
-    // 2. STEALTH LOGGING: No printf here!
-    if(num == SYS_exec) {
-       struct proc *p = myproc();
-       
-       // SECURITY LOGIC: Only log "untrusted" processes (PID > 2)
-       // This makes sure to ignore the system's own boot-up sequence.
-       if(p->pid > 2) {
-           record_audit(path); 
-       }
+    // Log the results (using the the exact path we saved earlier)
+    if(num == SYS_exec && p->pid > 2) {
+      char sp_str[32];
+      itoa(p->trapframe->sp, sp_str);
+      
+      record_audit_raw("[SP: ");
+      record_audit_raw(sp_str);
+      record_audit_raw("] Executed: ");
+      record_audit(path); // This uses the path grabbed in first step
     }
     // ----------------------------------
 

@@ -9,6 +9,22 @@
 
 static int loadseg(pde_t *, uint64, struct inode *, uint, uint);
 
+// Function to get a random number based on the current system ticks and process ID
+uint64 
+get_random_offset() {
+  extern uint ticks; // Use the global system clock used for the auditor
+  uint64 seed = ticks;
+  
+  // Safety check: only use the PID if a process is actually running
+  struct proc *p = myproc();
+  if(p != 0){
+    seed ^= (p->pid << 8);
+  }
+
+  // Reduce the range to % 16 (0-15 pages) 
+  return (seed % 16) * PGSIZE; 
+}
+
 // map ELF permissions to PTE permission bits.
 int flags2perm(int flags)
 {
@@ -35,6 +51,9 @@ kexec(char *path, char **argv)
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
 
+  // Generate the random offset
+  uint64 aslr_offset = get_random_offset();
+
   begin_op();
 
   // Open the executable file.
@@ -54,7 +73,7 @@ kexec(char *path, char **argv)
 
   if((pagetable = proc_pagetable(p)) == 0)
     goto bad;
-
+    
   // Load program into memory.
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
@@ -65,8 +84,8 @@ kexec(char *path, char **argv)
       goto bad;
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
-    if(ph.vaddr % PGSIZE != 0)
-      goto bad;
+
+    // Must map memory using the offset, but sz must track the TOTAL size
     uint64 sz1;
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz, flags2perm(ph.flags))) == 0)
       goto bad;
@@ -84,8 +103,12 @@ kexec(char *path, char **argv)
   // Allocate some pages at the next page boundary.
   // Make the first inaccessible as a stack guard.
   // Use the rest as the user stack.
+  // **After loading segments, sz is at the end of the code.
+  // **Add the random gap here!
   sz = PGROUNDUP(sz);
+  sz += aslr_offset; // This pushes the stack higher by a random amount
   uint64 sz1;
+  // Allocate the stack above the random gap
   if((sz1 = uvmalloc(pagetable, sz, sz + (USERSTACK+1)*PGSIZE, PTE_W)) == 0)
     goto bad;
   sz = sz1;
