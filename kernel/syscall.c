@@ -46,8 +46,6 @@ void record_audit(char *msg) {
   audit_log_buffer[audit_ptr++] = '\n';
 }
 
-
-
 // Fetch the uint64 at addr from the current process.
 int
 fetchaddr(uint64 addr, uint64 *ip)
@@ -171,6 +169,17 @@ static uint64 (*syscalls[])(void) = {
 [SYS_getaudit] sys_getaudit, // Added for silent audit
 };
 
+// A simple XOR checksum to detect kernel tampering
+uint64
+calculate_kernel_fingerprint() {
+  uint64 fingerprint = 0;
+  unsigned char *ptr = (unsigned char *)syscalls;
+  for(int i = 0; i < 100; i++) {
+    fingerprint ^= ptr[i];
+  }
+  return fingerprint;
+}
+
 void
 syscall(void)
 {
@@ -203,11 +212,19 @@ syscall(void)
     if(num == SYS_exec && p->pid > 2) {
       char sp_str[32];
       itoa(p->trapframe->sp, sp_str);
+
+      uint64 integrity = calculate_kernel_fingerprint();
+      char int_str[32];
+      itoa(integrity, int_str);
       
       record_audit_raw("[SP: ");
       record_audit_raw(sp_str);
       record_audit_raw("] Executed: ");
       record_audit(path); // This uses the path grabbed in first step
+
+      record_audit_raw("[INTEGRITY: ");
+      record_audit_raw(int_str);
+      record_audit_raw("] ");
     }
     // ----------------------------------
 
