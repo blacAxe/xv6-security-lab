@@ -1,19 +1,63 @@
 # Hardened xv6 Kernel Research
-This project implements a multi-layer security architecture for the RISC-V xv6 kernel.
 
-# Features
-1. *Stealth Kernel Auditor*: A ring-buffered logging system that tracks process execution (`exec`) with microsecond-accurate timestamps using kernel ticks.
-2. *Stack ASLR*: Implemented Address Space Layout Randomization for the user stack. Uses a combination of hardware cycles and PID-based entropy to randomize stack placement across 16 memory pages.
-3. *Active Access Control (CRITICAL POLICY)*: Implemented a kernel-level policy that identifies unauthorized access to sensitive file paths and terminates the offending process instantly.
-4. *Kernel Integrity Monitoring*: Added a checksum-based sentinel that monitors the system call table for unauthorized modifications (Rootkit detection).
+## Category
 
-# How to Verify
+Operating Systems / Security Research
+
+---
+
+## Overview
+
+A research-focused operating systems project that adds multiple security hardening mechanisms to the RISC-V xv6 kernel.
+
+The project explores how kernel-level auditing, memory randomization, access control, and integrity monitoring can be implemented inside a small educational operating system.
+
+---
+
+## Security Features
+
+### Stealth Kernel Auditor
+
+Implemented a ring-buffered kernel audit log that tracks process execution through `exec` events with timestamp information based on kernel ticks.
+
+### Stack ASLR
+
+Added Address Space Layout Randomization for the user stack by randomizing stack placement across multiple memory pages using PID and hardware cycle-based entropy.
+
+### Active Access Control
+
+Implemented a kernel-level policy that detects unauthorized access to sensitive file paths and terminates the offending process immediately.
+
+### Kernel Integrity Monitoring
+
+Added checksum-based monitoring for the system call table to detect unauthorized modifications similar to rootkit-style tampering.
+
+---
+
+## Verification
 - Run `spytree` to view the secure kernel audit log.
-- Observe the varying `[SP]` addresses to verify ASLR entropy.
-- Attempt to run `secret_tool` to see the Active Defense kill-switch in action.
+- Observe changing stack pointer addresses to verify ASLR behavior.
+- Attempt to run `secret_tool` to trigger the active access-control policy.
 
-# Commands to Run
-- $ ls
-- $ echo "top secret" > secret_tool
-- $ secret_tool
-- $ spytree
+---
+
+## Commands to Run
+
+```bash
+ls
+echo "top secret" > secret_tool
+secret_tool
+spytree
+
+```
+---
+
+## What This Demonstrates
+
+- Kernel instrumentation
+- Operating system security
+- Process auditing
+- Stack memory randomization
+- Kernel-level access control
+- System call table integrity monitoring
+- Low-level C systems programming
