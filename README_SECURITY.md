@@ -54,10 +54,10 @@ spytree
 
 ## What This Demonstrates
 
-- Kernel instrumentation
-- Operating system security
-- Process auditing
-- Stack memory randomization
-- Kernel-level access control
+- Operating system internals
+- Kernel instrumentation and observability
+- Memory layout randomization (ASLR)
+- Kernel-level policy enforcement
 - System call table integrity monitoring
+- Security-focused kernel hardening
 - Low-level C systems programming
